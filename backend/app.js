@@ -1,6 +1,7 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
+const path = require('path');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcrypt');
 const { body, validationResult } = require('express-validator');
@@ -10,6 +11,7 @@ const User = require('./models/User');
 const app = express();
 app.use(cors());
 app.use(express.json());
+app.use(express.static(path.join(__dirname, '..', 'frontend')));
 
 function auth(requiredAdmin = false) {
   return async (req, res, next) => {
@@ -120,6 +122,8 @@ app.get('/api/v1/users/waiting-rooms', auth(true), async (req, res, next) => {
     res.json({ totalRooms: rooms.length, activeRooms: rooms.filter((r) => r.active).length, rooms });
   } catch (error) { next(error); }
 });
+
+app.get('*', (_req, res) => res.sendFile(path.join(__dirname, '..', 'frontend', 'index.html')));
 
 app.use((error, _req, res, _next) => {
   console.error(error);
