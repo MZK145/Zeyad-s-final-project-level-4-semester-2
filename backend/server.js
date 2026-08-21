@@ -9,12 +9,18 @@ const mongoUrl = process.env.MONGO_URI || process.env.MONGODB_URI;
 
 async function start() {
   if (!mongoUrl) throw new Error('MONGO_URI is required');
+
   await mongoose.connect(mongoUrl);
+  console.log(`✅ MongoDB connected successfully to ${mongoose.connection.host}`);
+
   const server = http.createServer(app);
   const io = require('socket.io')(server, { cors: { origin: '*' } });
   app.locals.io = io;
   socketHandler(io);
-  server.listen(port, () => console.log(`MetroFlow API listening on ${port}`));
+  server.listen(port, () => console.log(`🚀 MetroFlow API listening on http://localhost:${port}`));
 }
 
-start().catch((error) => { console.error(error); process.exit(1); });
+start().catch((error) => {
+  console.error('❌ MongoDB/API startup failed:', error.message);
+  process.exit(1);
+});
