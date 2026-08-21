@@ -27,17 +27,11 @@ function auth(requiredAdmin = false) {
   };
 }
 
-function emitUpdate(req) {
-  req.app.locals.io?.emit('stationsUpdated');
-}
+function emitUpdate(req) { req.app.locals.io?.emit('stationsUpdated'); }
 
 app.get('/api/v1/health', (_req, res) => res.json({ ok: true }));
 
-app.post('/api/v1/auth/signup', [
-  body('name').trim().isLength({ min: 2, max: 100 }),
-  body('email').isEmail().normalizeEmail(),
-  body('password').isLength({ min: 6 })
-], async (req, res, next) => {
+app.post('/api/v1/auth/signup', [body('name').trim().isLength({ min: 2, max: 100 }), body('email').isEmail().normalizeEmail(), body('password').isLength({ min: 6 })], async (req, res, next) => {
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) return res.status(400).json({ error: errors.array()[0].msg });
@@ -66,26 +60,17 @@ app.post('/api/v1/auth/login', async (req, res, next) => {
   } catch (error) { next(error); }
 });
 
-app.get('/api/v1/stations', async (_req, res, next) => {
-  try { res.json(await Station.find().sort({ line: 1, order: 1 }).lean()); } catch (error) { next(error); }
-});
-
-app.get('/api/v1/stations/:id', async (req, res, next) => {
-  try {
-    const station = await Station.findById(req.params.id).lean();
-    if (!station) return res.status(404).json({ error: 'Station not found' });
-    res.json(station);
-  } catch (error) { next(error); }
-});
+app.get('/api/v1/stations', async (_req, res, next) => { try { res.json(await Station.find().sort({ line: 1, order: 1 }).lean()); } catch (error) { next(error); } });
+app.get('/api/v1/stations/:id', async (req, res, next) => { try { const station = await Station.findById(req.params.id).lean(); if (!station) return res.status(404).json({ error: 'Station not found' }); res.json(station); } catch (error) { next(error); } });
 
 const stationFields = ['name','line','order','governorate','city','arrivalTime','departureTime'];
 app.post('/api/v1/stations', auth(true), async (req, res, next) => {
   try {
     const payload = Object.fromEntries(stationFields.map((key) => [key, req.body[key]]));
-    if (!payload.name || !payload.line || !payload.governorate || !payload.city || !Number.isInteger(Number(payload.order))) return res.status(400).json({ error: 'Invalid station data' });
-    const station = await Station.create({ ...payload, order: Number(payload.order) });
-    emitUpdate(req);
-    res.status(201).json(station);
+    payload.order = Number(payload.order);
+    if (!payload.name || !payload.line || !payload.governorate || !payload.city || !Number.isInteger(payload.order)) return res.status(400).json({ error: 'Invalid station data' });
+    const station = await Station.create(payload);
+    emitUpdate(req); res.status(201).json(station);
   } catch (error) { next(error); }
 });
 
@@ -95,8 +80,7 @@ app.put('/api/v1/stations/:id', auth(true), async (req, res, next) => {
     payload.order = Number(payload.order);
     const station = await Station.findByIdAndUpdate(req.params.id, payload, { new: true, runValidators: true }).lean();
     if (!station) return res.status(404).json({ error: 'Station not found' });
-    emitUpdate(req);
-    res.json(station);
+    emitUpdate(req); res.json(station);
   } catch (error) { next(error); }
 });
 
@@ -104,8 +88,7 @@ app.delete('/api/v1/stations/:id', auth(true), async (req, res, next) => {
   try {
     const station = await Station.findByIdAndDelete(req.params.id);
     if (!station) return res.status(404).json({ error: 'Station not found' });
-    emitUpdate(req);
-    res.json({ message: 'Station deleted' });
+    emitUpdate(req); res.json({ message: 'Station deleted' });
   } catch (error) { next(error); }
 });
 
@@ -113,21 +96,16 @@ app.get('/api/v1/users/waiting-rooms', auth(true), async (req, res, next) => {
   try {
     const io = req.app.locals.io;
     const stations = await Station.find().sort({ line: 1, order: 1 }).lean();
-    const rooms = stations.map((station) => ({
-      stationId: String(station._id), name: station.name, line: station.line,
-      governorate: station.governorate, city: station.city,
-      onlinePassengers: io?.getStationPresence?.(station._id) || 0,
-      active: (io?.getStationPresence?.(station._id) || 0) > 0
-    }));
+    const rooms = stations.map((station) => ({ stationId: String(station._id), name: station.name, line: station.line, governorate: station.governorate, city: station.city, onlinePassengers: io?.getStationPresence?.(station._id) || 0, active: (io?.getStationPresence?.(station._id) || 0) > 0 }));
     res.json({ totalRooms: rooms.length, activeRooms: rooms.filter((r) => r.active).length, rooms });
   } catch (error) { next(error); }
 });
 
-app.get('*', (_req, res) => res.sendFile(path.join(__dirname, '..', 'frontend', 'index.html')));
-
-app.use((error, _req, res, _next) => {
-  console.error(error);
-  res.status(500).json({ error: 'Server error' });
+app.use((req, res, next) => {
+  if (req.path.startsWith('/api/')) return next();
+  if (req.method !== 'GET') return next();
+  res.sendFile(path.join(__dirname, '..', 'frontend', 'index.html'));
 });
 
+app.use((error, _req, res, _next) => { console.error(error); res.status(500).json({ error: 'Server error' }); });
 module.exports = app;
