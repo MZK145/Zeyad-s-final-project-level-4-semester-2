@@ -1,4 +1,4 @@
-const API = window.BACKEND_URL;
+const API = window.BACKEND_URL || 'http://localhost:5000';
 let stations = [];
 let socket = null;
 let selectedOrigin = null;
@@ -23,7 +23,7 @@ function showApp(role){
 async function request(path, options={}){
   const res=await fetch(`${API}${path}`,{...options,headers:{...(options.headers||{}),...(localStorage.getItem('metro_token')?authHeaders():{})}});
   const data=await res.json().catch(()=>({}));
-  if(!res.ok) throw new Error(data.error||'Request failed');
+  if(!res.ok) throw new Error(data.error||`Request failed (${res.status})`);
   return data;
 }
 
