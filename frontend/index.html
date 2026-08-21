@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MetroFlow — Smart Metro Planner</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="https://cdn.socket.io/4.8.3/socket.io.min.js"></script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand"><span class="brand-mark">MF</span><div><strong>MetroFlow</strong><small>Smart metro planning</small></div></div>
+    <div class="top-actions"><span id="sessionBadge" class="badge">Guest</span><button id="logoutBtn" class="ghost" hidden>Log out</button></div>
+  </header>
+
+  <main class="shell">
+    <section id="authView" class="hero-layout">
+      <div class="hero-copy">
+        <span class="eyebrow">ALTERNATE METRO EXPERIENCE</span>
+        <h1>Plan your ride around live station activity.</h1>
+        <p>Pick a station, build a route, and watch its waiting room update in real time.</p>
+        <div class="hero-stats"><div><strong>Live</strong><span>room updates</span></div><div><strong>Fast</strong><span>route planning</span></div><div><strong>Safe</strong><span>account sessions</span></div></div>
+      </div>
+      <div class="auth-card">
+        <div class="tabs"><button id="loginTab" class="tab active">Login</button><button id="signupTab" class="tab">Create account</button></div>
+        <form id="loginForm" class="stack">
+          <label>Email<input id="loginEmail" type="email" required placeholder="you@example.com"></label>
+          <label>Password<input id="loginPassword" type="password" required placeholder="••••••••"></label>
+          <button class="primary" type="submit">Enter MetroFlow</button>
+        </form>
+        <form id="signupForm" class="stack" hidden>
+          <label>Name<input id="signupName" required placeholder="Your name"></label>
+          <label>Email<input id="signupEmail" type="email" required placeholder="you@example.com"></label>
+          <label>Password<input id="signupPassword" type="password" minlength="6" required placeholder="6+ characters"></label>
+          <button class="primary" type="submit">Create passenger account</button>
+        </form>
+        <p id="authMessage" class="message"></p>
+      </div>
+    </section>
+
+    <section id="appView" hidden>
+      <div class="welcome-row"><div><span class="eyebrow">CONTROL BOARD</span><h2 id="welcomeTitle">Welcome back</h2></div><div class="signal"><span class="dot"></span><span>Live connection</span></div></div>
+
+      <div id="passengerHome" class="dashboard-grid">
+        <article class="action-card accent-card"><span class="card-icon">↗</span><h3>Plan a journey</h3><p>Choose an origin and destination in a guided route builder.</p><button id="openPlanner" class="primary">Start planning</button></article>
+        <article class="action-card"><span class="card-icon">⌁</span><h3>Station pulse</h3><p id="pulseText">Load station data to see where passengers are waiting.</p><button id="refreshPulse" class="secondary">Refresh stations</button></article>
+        <article class="action-card"><span class="card-icon">◎</span><h3>My live room</h3><p id="roomSummary">No room selected.</p><button id="openMyRoom" class="secondary">Open current room</button></article>
+      </div>
+
+      <section id="planner" class="panel" hidden>
+        <div class="panel-head"><div><span class="eyebrow">ROUTE BUILDER</span><h3>Design your trip</h3></div><button class="ghost" data-close="planner">Close</button></div>
+        <div class="steps"><span class="step active">1 Origin</span><span class="step">2 Destination</span><span class="step">3 Waiting room</span></div>
+        <div id="originStep" class="step-body two-col">
+          <label>Governorate<select id="govSelect"></select></label>
+          <label>City<select id="citySelect" disabled></select></label>
+          <label class="wide">Origin station<select id="originSelect" disabled></select></label>
+          <div class="wide actions"><button id="toDestination" class="primary">Continue →</button></div>
+        </div>
+        <div id="destinationStep" class="step-body two-col" hidden>
+          <label class="wide">Destination station<select id="destinationSelect"></select></label>
+          <div class="wide route-preview" id="routePreview"></div>
+          <div class="wide actions"><button id="backOrigin" class="secondary">← Back</button><button id="joinRoom" class="primary">Open waiting room</button></div>
+        </div>
+      </section>
+
+      <section id="roomPanel" class="panel" hidden>
+        <div class="panel-head"><div><span class="eyebrow">LIVE STATION ROOM</span><h3 id="roomTitle">Waiting room</h3></div><button id="leaveRoom" class="ghost">Leave room</button></div>
+        <div class="room-banner"><div><span>Passengers currently waiting</span><strong id="roomCount">0</strong></div><div><span>Your destination</span><strong id="roomDestination">—</strong></div></div>
+        <div class="timeline"><div class="timeline-line"></div><span class="node start">Origin</span><span class="node now">You</span><span class="node end">Destination</span></div>
+        <p id="roomHint" class="message"></p>
+      </section>
+
+      <section id="adminPanel" class="panel" hidden>
+        <div class="panel-head"><div><span class="eyebrow">ADMIN CONSOLE</span><h3>Station control</h3></div><button id="adminRefresh" class="secondary">Refresh</button></div>
+        <div id="stationTable" class="station-list"></div>
+      </section>
+    </section>
+  </main>
+
+  <script>window.BACKEND_URL = window.BACKEND_URL || 'http://localhost:5000';</script>
+  <script src="app.js"></script>
+</body>
+</html>
