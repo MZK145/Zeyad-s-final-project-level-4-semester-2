@@ -1,0 +1,14 @@
+const express = require('express');
+const mongoose = require('mongoose');
+const { body, validationResult } = require('express-validator');
+const Station = require('../models/Station');
+const controller = require('../controllers/stationController');
+const requireAdmin = require('../middleware/requireAdmin');
+const router = express.Router();
+const validate = [body('name').trim().isLength({ min: 2, max: 100 }), body('line').trim().isLength({ min: 1, max: 50 }), body('order').isInt({ min: 1 }), body('governorate').trim().isLength({ min: 2, max: 100 }), body('city').trim().isLength({ min: 2, max: 100 }), body('arrivalTime').optional({ values: 'falsy' }).matches(/^([01]\d|2[0-3]):[0-5]\d$/), body('departureTime').optional({ values: 'falsy' }).matches(/^([01]\d|2[0-3]):[0-5]\d$/), (req, res, next) => { const errors = validationResult(req); if (!errors.isEmpty()) return res.status(400).json({ error: errors.array()[0].msg }); next(); }];
+router.get('/', controller.getStations);
+router.get('/:id', async (req, res, next) => { try { if (!mongoose.isValidObjectId(req.params.id)) return res.status(400).json({ error: 'Invalid station id' }); const station = await Station.findById(req.params.id); if (!station) return res.status(404).json({ error: 'Station not found' }); res.json(station); } catch (e) { next(e); } });
+router.post('/', requireAdmin, validate, async (req, res, next) => { try { const duplicate = await Station.findOne({ name: req.body.name, line: req.body.line }); if (duplicate) return res.status(409).json({ error: 'Station already exists on this line' }); const station = await Station.create(req.body); req.app.locals.io?.emit('stationsUpdated'); res.status(201).json(station); } catch (e) { next(e); } });
+router.put('/:id', requireAdmin, validate, async (req, res, next) => { try { if (!mongoose.isValidObjectId(req.params.id)) return res.status(400).json({ error: 'Invalid station id' }); const station = await Station.findByIdAndUpdate(req.params.id, req.body, { new: true, runValidators: true }); if (!station) return res.status(404).json({ error: 'Station not found' }); req.app.locals.io?.emit('stationsUpdated'); res.json(station); } catch (e) { next(e); } });
+router.delete('/:id', requireAdmin, async (req, res, next) => { try { if (!mongoose.isValidObjectId(req.params.id)) return res.status(400).json({ error: 'Invalid station id' }); const station = await Station.findByIdAndDelete(req.params.id); if (!station) return res.status(404).json({ error: 'Station not found' }); req.app.locals.io?.emit('stationsUpdated'); res.json({ message: 'Station deleted' }); } catch (e) { next(e); } });
+module.exports = router;

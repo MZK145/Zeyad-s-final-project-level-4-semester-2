@@ -1,0 +1,1 @@
+window.adminEnhancementsLoaded = true;

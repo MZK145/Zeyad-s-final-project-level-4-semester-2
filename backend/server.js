@@ -4,23 +4,17 @@ const mongoose = require('mongoose');
 const app = require('./app');
 const { socketHandler } = require('./sockets/socketHandler');
 
-const port = Number(process.env.PORT || 5000);
-const server = http.createServer(app);
-const io = socketHandler(server);
-app.locals.io = io;
+const port = process.env.PORT || 5000;
+const mongoUrl = process.env.MONGO_URI || process.env.MONGODB_URI;
 
 async function start() {
-  if (process.env.MONGO_URI) {
-    await mongoose.connect(process.env.MONGO_URI);
-    console.log('MongoDB connected');
-  } else {
-    console.warn('MONGO_URI is not set; API will fail for database operations.');
-  }
-
-  server.listen(port, () => console.log(`MetroSync alternate backend running on ${port}`));
+  if (!mongoUrl) throw new Error('MONGO_URI is required');
+  await mongoose.connect(mongoUrl);
+  const server = http.createServer(app);
+  const io = require('socket.io')(server, { cors: { origin: '*' } });
+  app.locals.io = io;
+  socketHandler(io);
+  server.listen(port, () => console.log(`MetroFlow API listening on ${port}`));
 }
 
-start().catch((error) => {
-  console.error('Startup error:', error);
-  process.exit(1);
-});
+start().catch((error) => { console.error(error); process.exit(1); });

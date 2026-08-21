@@ -1,15 +1,18 @@
-# MetroSync – Alternate Flow
+# MetroFlow
 
-A redesigned MetroSync application with a different frontend flow from the original project.
+A restructured MetroSync implementation with the same core output and behavior, but a different frontend flow and code organization.
 
-## New flow
-- Landing dashboard → choose **Plan Journey** or **Admin Console**.
-- Journey planner uses a step-by-step route card instead of the original stacked forms.
-- Passenger waiting rooms update live through Socket.IO.
-- Admin station editor uses a drawer-style editor and refreshes all open views after changes.
+## Features
+- Passenger signup/login
+- Governorate → city → station journey flow
+- Live station waiting rooms with Socket.IO presence
+- Station announcements
+- Admin station add/edit/delete
+- Real-time station synchronization after changes
+- Separate controllers/services/routes/models on the backend
 
-## Run
-1. Create `backend/.env` from `backend/.env.example`.
-2. Run `npm install` inside `backend`.
-3. Run `npm start`.
-4. Serve `frontend/` from the same host or configure `BACKEND_URL` in `frontend/index.html`.
+## Run backend
+1. Copy `backend/.env.example` to `backend/.env`.
+2. Set `MONGO_URI` and `JWT_SECRET`.
+3. Run `npm install` then `npm start` from `backend`.
+4. Serve `frontend/` with any static host, setting `window.BACKEND_URL` when backend is hosted separately.

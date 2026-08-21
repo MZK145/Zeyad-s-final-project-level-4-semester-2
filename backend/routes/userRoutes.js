@@ -1,0 +1,10 @@
+const express = require('express');
+const requireAdmin = require('../middleware/requireAdmin');
+const User = require('../models/User');
+const Station = require('../models/Station');
+const { getOnlineCount, getStationPresence } = require('../sockets/socketHandler');
+const router = express.Router();
+router.get('/', requireAdmin, async (_req, res, next) => { try { res.json({ count: await User.countDocuments() }); } catch (e) { next(e); } });
+router.get('/online', requireAdmin, (req, res) => res.json({ count: getOnlineCount(req.app.locals.io), type: 'passengers-in-waiting-rooms' }));
+router.get('/waiting-rooms', requireAdmin, async (req, res, next) => { try { const io = req.app.locals.io; const stations = await Station.find().sort({ line: 1, order: 1 }).lean(); const rooms = stations.map(s => ({ stationId: String(s._id), name: s.name, line: s.line, governorate: s.governorate, city: s.city, onlinePassengers: getStationPresence(io, s._id), active: getStationPresence(io, s._id) > 0 })); res.json({ totalRooms: rooms.length, activeRooms: rooms.filter(r => r.active).length, onlinePassengers: getOnlineCount(io), rooms }); } catch (e) { next(e); } });
+module.exports = router;
