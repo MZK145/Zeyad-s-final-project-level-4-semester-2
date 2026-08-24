@@ -13,60 +13,66 @@ function getJwtSecret() {
   return secret;
 }
 
+function normalizeEmail(email) {
+  return String(email || '').trim().toLowerCase();
+}
+
 async function signup({ name, email, password }) {
   const cleanName = String(name || '').trim();
-  const normalized = String(email || '').trim().toLowerCase();
+  const normalized = normalizeEmail(email);
   const cleanPassword = String(password || '');
 
   if (!cleanName || !normalized || !cleanPassword) fail('All fields are required', 400);
-  if (cleanPassword.length < 6) fail('Password must be at least 6 characters', 400);
-  if (await User.findOne({ email: normalized })) fail('Email already registered', 409);
+  if (cleanName.length < 2 || cleanName.length > 100) fail('Name must be 2–100 characters', 400);
+  if (cleanPassword.length < 6 || cleanPassword.length > 128) fail('Password must be 6–128 characters', 400);
+
+  const existing = await User.findOne({ email: normalized }).select('_id').lean();
+  if (existing) fail('Email already registered', 409);
 
   await User.create({
     name: cleanName,
     email: normalized,
-    passwordHash: await bcrypt.hash(cleanPassword, 10)
+    passwordHash: await bcrypt.hash(cleanPassword, 12)
   });
 
   return { message: 'Account created' };
 }
 
 async function login({ email, password }) {
-  const normalized = String(email || '').trim().toLowerCase();
+  const normalized = normalizeEmail(email);
   const cleanPassword = String(password || '');
 
   if (!normalized || !cleanPassword) fail('Email and password are required', 400);
 
   const secret = getJwtSecret();
-  const admin = await Admin.findOne({ email: normalized }).lean();
+  const admin = await Admin.findOne({ email: normalized }).select('+passwordHash').lean();
 
   if (admin) {
-    if (!admin.passwordHash) fail('Invalid credentials', 401);
-    const isValid = await bcrypt.compare(cleanPassword, admin.passwordHash).catch(() => false);
+    const isValid = await bcrypt.compare(cleanPassword, admin.passwordHash || '').catch(() => false);
     if (!isValid) fail('Invalid credentials', 401);
 
-    const token = jwt.sign(
-      { id: String(admin._id), role: 'admin', email: normalized },
-      secret,
-      { expiresIn: '8h' }
-    );
-
-    return { token, role: 'admin' };
+    return {
+      token: jwt.sign(
+        { id: String(admin._id), role: 'admin', email: normalized },
+        secret,
+        { expiresIn: '8h', issuer: 'metroflow-api', audience: 'metroflow-client' }
+      ),
+      role: 'admin'
+    };
   }
 
-  const user = await User.findOne({ email: normalized });
-  if (!user || !user.passwordHash) fail('Invalid credentials', 401);
+  const user = await User.findOne({ email: normalized }).select('+passwordHash').lean();
+  const isValid = await bcrypt.compare(cleanPassword, user?.passwordHash || '').catch(() => false);
+  if (!user || !isValid) fail('Invalid credentials', 401);
 
-  const isValid = await bcrypt.compare(cleanPassword, user.passwordHash).catch(() => false);
-  if (!isValid) fail('Invalid credentials', 401);
-
-  const token = jwt.sign(
-    { id: String(user._id), role: 'user', email: normalized },
-    secret,
-    { expiresIn: '8h' }
-  );
-
-  return { token, role: 'user' };
+  return {
+    token: jwt.sign(
+      { id: String(user._id), role: 'user', email: normalized },
+      secret,
+      { expiresIn: '8h', issuer: 'metroflow-api', audience: 'metroflow-client' }
+    ),
+    role: 'user'
+  };
 }
 
 module.exports = { signup, login };

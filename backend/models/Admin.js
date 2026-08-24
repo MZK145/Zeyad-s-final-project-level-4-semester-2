@@ -1,2 +1,31 @@
 const mongoose = require('mongoose');
-module.exports = mongoose.model('Admin', new mongoose.Schema({ email: { type: String, unique: true }, passwordHash: String }));
+
+const adminSchema = new mongoose.Schema(
+  {
+    email: {
+      type: String,
+      required: true,
+      unique: true,
+      lowercase: true,
+      trim: true,
+      minlength: 5,
+      maxlength: 254,
+      match: /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+    },
+    passwordHash: {
+      type: String,
+      required: true,
+      select: false
+    }
+  },
+  { timestamps: true }
+);
+
+adminSchema.set('toJSON', {
+  transform: (_doc, ret) => {
+    delete ret.passwordHash;
+    return ret;
+  }
+});
+
+module.exports = mongoose.model('Admin', adminSchema);
