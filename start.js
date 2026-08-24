@@ -6,11 +6,12 @@ const backendDir = path.join(root, 'backend');
 const frontendDir = path.join(root, 'frontend');
 const children = new Set();
 
-function start(cmd, args, cwd, label) {
+function start(cmd, args, cwd, label, env = process.env) {
   const child = spawn(cmd, args, {
     cwd,
     shell: true,
-    stdio: 'inherit'
+    stdio: 'inherit',
+    env
   });
 
   children.add(child);
@@ -36,7 +37,8 @@ function shutdown(signal) {
 }
 
 console.log('Starting MetroFlow backend and frontend...');
-start('npm', ['run', 'dev'], backendDir, 'Backend');
+const backendEnv = { ...process.env, PORT: '5001' };
+start('npm', ['run', 'dev'], backendDir, 'Backend', backendEnv);
 start('npx', ['--yes', 'http-server', '-p', '8000', '.'], frontendDir, 'Frontend');
 
 process.on('SIGINT', () => shutdown('SIGINT'));
