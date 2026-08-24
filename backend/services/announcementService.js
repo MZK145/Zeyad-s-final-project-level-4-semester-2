@@ -16,7 +16,12 @@ async function list(stationId, options = {}) {
   const filter = String(options.filter || options.search || '').trim();
   const query = { stationId };
 
-  if (filter) query.message = { $regex: filter, $options: 'i' };
+  if (filter) {
+    query.$or = [
+      { text: { $regex: filter, $options: 'i' } },
+      { message: { $regex: filter, $options: 'i' } }
+    ];
+  }
 
   const [items, totalItems] = await Promise.all([
     Announcement.find(query)
@@ -45,7 +50,7 @@ async function create(stationId, message) {
   const stationExists = await Station.exists({ _id: stationId });
   if (!stationExists) throw Object.assign(new Error('Station not found'), { statusCode: 404 });
 
-  return Announcement.create({ stationId, message: text });
+  return Announcement.create({ stationId, text, message: text });
 }
 
 module.exports = { list, create };
