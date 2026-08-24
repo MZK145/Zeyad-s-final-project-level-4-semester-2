@@ -1,4 +1,3 @@
-const path = require('path');
 const express = require('express');
 const helmet = require('helmet');
 const cors = require('cors');
@@ -53,4 +52,4 @@ app.use((req, res) => res.status(404).json({
 }));
 app.use(errorHandler);
 
-module.exports = { app, allowedOrigins };
+module.exports = app;
