@@ -18,31 +18,37 @@ The backend provides:
 
 1. Copy `backend/.env.example` to `backend/.env`.
 2. Set `MONGO_URI`, `JWT_SECRET`, `ADMIN_EMAIL`, and `ADMIN_PASSWORD`.
-3. From `backend/`, install dependencies:
+3. Make sure the local backend port is `5001` in `backend/.env`:
+
+```env
+PORT=5001
+```
+
+4. From `backend/`, install dependencies:
 
 ```bash
 npm ci
 ```
 
-4. Seed the station list:
+5. Seed the station list:
 
 ```bash
 npm run seed:stations
 ```
 
-5. Create/update the MongoDB admin record using bcrypt:
+6. Create/update the MongoDB admin record using bcrypt:
 
 ```bash
 npm run seed:admin
 ```
 
-6. Start the API:
+7. Start the API:
 
 ```bash
 npm start
 ```
 
-The API listens on `http://localhost:5000` by default and the health endpoint is `/api/v1/health`.
+The local API listens on `http://localhost:5001` by default and the health endpoint is `/api/v1/health`.
 
 ## Frontend
 
@@ -51,6 +57,8 @@ Serve `frontend/` with the root launcher:
 ```bash
 npm run dev
 ```
+
+The root launcher keeps the frontend on port `8000` and the API on port `5001` so the two local services do not conflict.
 
 The frontend can also be served by any static host. Set `window.BACKEND_URL` to the deployed API URL when the frontend and API are hosted separately.
 
@@ -67,7 +75,7 @@ The test suite covers the rubric-required station 200 response, valid admin logi
 
 ## Postman
 
-The rubric-aligned collection is stored at `postman/MetroSync.postman_collection.json`. It includes login, stations, announcement list, and announcement create requests with saved example responses.
+The rubric-aligned collection is stored at `postman/MetroSync.postman_collection.json`. Its local `baseUrl` is `http://localhost:5001`.
 
 ## Render deployment
 
@@ -79,4 +87,4 @@ The rubric-aligned collection is stored at `postman/MetroSync.postman_collection
 - `ADMIN_PASSWORD`
 - `FRONTEND_ORIGINS`
 
-Render uses `/api/v1/health` as the health check. After deployment, verify the public API health endpoint and update the Postman `baseUrl` variable to the deployed URL.
+Render supplies the production `PORT` automatically, so the local `5001` setting is only a development default. Render uses `/api/v1/health` as the health check.

@@ -4,7 +4,8 @@ const mongoose = require('mongoose');
 const app = require('./app');
 const { socketHandler } = require('./sockets/socketHandler');
 
-const port = Number(process.env.PORT) || 5000;
+// Local development defaults to 5001. Render supplies its own PORT at runtime.
+const port = Number(process.env.PORT) || 5001;
 const mongoUrl = process.env.MONGO_URI || process.env.MONGODB_URI;
 const socketOrigins = String(process.env.FRONTEND_ORIGINS || '')
   .split(',')
