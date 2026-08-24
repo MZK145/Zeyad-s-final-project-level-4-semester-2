@@ -1,13 +1,23 @@
 const express = require('express');
+const rateLimit = require('express-rate-limit');
 const { body, validationResult } = require('express-validator');
 const controller = require('../controllers/authController');
 
 const router = express.Router();
+
 const validate = (req, res, next) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) return res.status(400).json({ error: errors.array()[0].msg });
   return next();
 };
+
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many login attempts. Please try again later.' }
+});
 
 const authFields = [
   body('email').isEmail().withMessage('A valid email is required').normalizeEmail(),
@@ -20,7 +30,7 @@ router.post('/signup', [
   validate
 ], controller.signup);
 
-router.post('/login', [
+router.post('/login', loginLimiter, [
   ...authFields,
   validate
 ], controller.login);
