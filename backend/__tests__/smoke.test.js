@@ -21,13 +21,28 @@ describe('MetroFlow smoke tests', () => {
     expect(res.body.ok).toBe(true);
   });
 
-  test('allows the frontend origin used by the Metro app', async () => {
+  test.each(['http://localhost:8000', 'null'])('allows frontend origin %s', async (origin) => {
     const res = await request(app)
       .get('/api/v1/health')
-      .set('Origin', 'http://localhost:8000');
+      .set('Origin', origin);
 
     expect(res.status).toBe(200);
-    expect(res.headers['access-control-allow-origin']).toBe('http://localhost:8000');
+    expect(res.headers['access-control-allow-origin']).toBe(origin);
+  });
+
+  test('rejects invalid login input before touching the database', async () => {
+    const originalFindOne = User.findOne;
+    User.findOne = jest.fn();
+
+    const res = await request(app)
+      .post('/api/v1/auth/login')
+      .send({ email: 'not-an-email', password: '123' });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBeTruthy();
+    expect(User.findOne).not.toHaveBeenCalled();
+
+    User.findOne = originalFindOne;
   });
 
   test('login rejects a user record with a missing password hash without crashing', async () => {
