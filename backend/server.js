@@ -6,21 +6,24 @@ const { socketHandler } = require('./sockets/socketHandler');
 
 const port = Number(process.env.PORT) || 5000;
 const mongoUrl = process.env.MONGO_URI || process.env.MONGODB_URI;
+const socketOrigins = String(process.env.FRONTEND_ORIGINS || '')
+  .split(',')
+  .map((origin) => origin.trim())
+  .filter(Boolean);
+const socketCorsOrigin = socketOrigins.length ? socketOrigins : '*';
 
 function startServer(portToUse) {
   return new Promise((resolve, reject) => {
     const server = http.createServer(app);
-    const io = require('socket.io')(server, { cors: { origin: '*' } });
+    const io = require('socket.io')(server, { cors: { origin: socketCorsOrigin } });
     app.locals.io = io;
     socketHandler(io);
 
     server.on('error', (error) => {
       if (error.code === 'EADDRINUSE') {
-        console.error(`Port ${portToUse} is already in use. Stop the stale MetroFlow process or use a different PORT.`);
-        process.exit(1);
-        return;
+        return reject(new Error(`Port ${portToUse} is already in use. Stop the other MetroFlow process or change PORT.`));
       }
-      reject(error);
+      return reject(error);
     });
 
     server.listen(portToUse, () => {
@@ -32,6 +35,7 @@ function startServer(portToUse) {
 
 async function start() {
   if (!mongoUrl) throw new Error('MONGO_URI is required');
+  if (!String(process.env.JWT_SECRET || '').trim()) throw new Error('JWT_SECRET is required');
 
   await mongoose.connect(mongoUrl);
   console.log(`✅ MongoDB connected successfully to ${mongoose.connection.host}`);
