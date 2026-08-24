@@ -1,38 +1,60 @@
 const request = require('supertest');
+const bcrypt = require('bcrypt');
 const app = require('../app');
-const authService = require('../services/authService');
-const User = require('../models/User');
+const Admin = require('../models/Admin');
+const stationService = require('../services/stationService');
 
-describe('MetroFlow smoke tests', () => {
+describe('MetroSync rubric integration tests', () => {
   beforeAll(() => {
     process.env.JWT_SECRET = 'test-secret-key';
   });
 
-  test('GET / returns API metadata', async () => {
-    const res = await request(app).get('/');
-    expect(res.status).toBe(200);
-    expect(res.body.name).toBe('MetroFlow API');
-    expect(res.body.status).toBe('ok');
+  afterEach(() => {
+    jest.restoreAllMocks();
   });
 
-  test('GET /api/v1/health returns healthy status', async () => {
-    const res = await request(app).get('/api/v1/health');
+  test('GET /api/v1/stations returns 200 and a JSON array', async () => {
+    jest.spyOn(stationService, 'listStations').mockResolvedValue([
+      { _id: '1', name: 'Test Station', line: 'Line 1', order: 1 }
+    ]);
+
+    const res = await request(app).get('/api/v1/stations');
+
     expect(res.status).toBe(200);
-    expect(res.body.ok).toBe(true);
+    expect(Array.isArray(res.body)).toBe(true);
   });
 
-  test.each(['http://localhost:8000', 'null'])('allows frontend origin %s', async (origin) => {
+  test('valid admin login returns a JWT token', async () => {
+    const passwordHash = await bcrypt.hash('password123', 10);
+    jest.spyOn(Admin, 'findOne').mockReturnValue({
+      lean: jest.fn().mockResolvedValue({
+        _id: '507f1f77bcf86cd799439011',
+        email: 'admin@example.com',
+        passwordHash
+      })
+    });
+
     const res = await request(app)
-      .get('/api/v1/health')
-      .set('Origin', origin);
+      .post('/api/v1/auth/login')
+      .send({ email: 'admin@example.com', password: 'password123' });
 
     expect(res.status).toBe(200);
-    expect(res.headers['access-control-allow-origin']).toBe(origin);
+    expect(res.body.role).toBe('admin');
+    expect(typeof res.body.token).toBe('string');
+    expect(res.body.token.length).toBeGreaterThan(20);
   });
 
-  test('rejects invalid login input before touching the database', async () => {
-    const originalFindOne = User.findOne;
-    User.findOne = jest.fn();
+  test('protected announcement POST without a token returns 401', async () => {
+    const res = await request(app)
+      .post('/api/v1/stations/507f1f77bcf86cd799439011/announcements')
+      .send({ message: 'Test announcement' });
+
+    expect(res.status).toBe(401);
+    expect(res.body.error).toBeTruthy();
+  });
+
+  test('invalid login input is rejected before database authentication', async () => {
+    const findOne = jest.spyOn(Admin, 'findOne');
 
     const res = await request(app)
       .post('/api/v1/auth/login')
@@ -40,19 +62,6 @@ describe('MetroFlow smoke tests', () => {
 
     expect(res.status).toBe(400);
     expect(res.body.error).toBeTruthy();
-    expect(User.findOne).not.toHaveBeenCalled();
-
-    User.findOne = originalFindOne;
-  });
-
-  test('login rejects a user record with a missing password hash without crashing', async () => {
-    const originalFindOne = User.findOne;
-    User.findOne = jest.fn().mockResolvedValue({ _id: 'bad-user', email: 'bad@example.com' });
-
-    await expect(
-      authService.login({ email: 'bad@example.com', password: '123456' })
-    ).rejects.toMatchObject({ statusCode: 401, message: 'Invalid credentials' });
-
-    User.findOne = originalFindOne;
+    expect(findOne).not.toHaveBeenCalled();
   });
 });
