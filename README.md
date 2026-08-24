@@ -1,18 +1,24 @@
 # MetroFlow
 
-A restructured MetroSync implementation with the same core output and behavior, but a different frontend flow and code organization.
+A simple metro web app with:
+- Node.js + Express backend
+- MongoDB database
+- Socket.IO live updates
+- Static frontend in frontend/
 
-## Features
-- Passenger signup/login
-- Governorate → city → station journey flow
-- Live station waiting rooms with Socket.IO presence
-- Station announcements
-- Admin station add/edit/delete
-- Real-time station synchronization after changes
-- Separate controllers/services/routes/models on the backend
+## Run
 
-## Run backend
-1. Copy `backend/.env.example` to `backend/.env`.
-2. Set `MONGO_URI` and `JWT_SECRET`.
-3. Run `npm install` then `npm start` from `backend`.
-4. Serve `frontend/` with any static host, setting `window.BACKEND_URL` when backend is hosted separately.
+1. Open backend folder
+2. Create .env with:
+   PORT=5000
+   MONGO_URI=your_mongodb_uri
+   JWT_SECRET=your_secret
+3. Run:
+   npm install
+   npm start
+4. Open frontend/index.html in a browser
+
+## Project structure
+
+- backend/
+- frontend/
