@@ -23,8 +23,7 @@ const configuredOrigins = String(process.env.FRONTEND_ORIGINS || '')
 const allowedOrigins = new Set([...localOrigins, ...configuredOrigins]);
 
 function corsOrigin(origin, callback) {
-  if (!origin || allowedOrigins.has(origin)) return callback(null, true);
-  return callback(new Error('Origin is not allowed by CORS'));
+  return callback(null, !origin || allowedOrigins.has(origin));
 }
 
 app.use(helmet());
