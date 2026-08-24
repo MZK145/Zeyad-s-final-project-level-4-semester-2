@@ -2,6 +2,7 @@ const request = require('supertest');
 const bcrypt = require('bcrypt');
 const app = require('../app');
 const Admin = require('../models/Admin');
+const User = require('../models/User');
 const stationService = require('../services/stationService');
 
 describe('MetroSync rubric integration tests', () => {
@@ -24,13 +25,15 @@ describe('MetroSync rubric integration tests', () => {
     expect(Array.isArray(res.body)).toBe(true);
   });
 
-  test('valid admin login returns a JWT token', async () => {
-    const passwordHash = await bcrypt.hash('password123', 10);
+  test('valid admin login returns a JWT token with role', async () => {
+    const passwordHash = await bcrypt.hash('password123', 12);
     jest.spyOn(Admin, 'findOne').mockReturnValue({
-      lean: jest.fn().mockResolvedValue({
-        _id: '507f1f77bcf86cd799439011',
-        email: 'admin@example.com',
-        passwordHash
+      select: jest.fn().mockReturnValue({
+        lean: jest.fn().mockResolvedValue({
+          _id: '507f1f77bcf86cd799439011',
+          email: 'admin@example.com',
+          passwordHash
+        })
       })
     });
 
@@ -63,5 +66,14 @@ describe('MetroSync rubric integration tests', () => {
     expect(res.status).toBe(400);
     expect(res.body.error).toBeTruthy();
     expect(findOne).not.toHaveBeenCalled();
+  });
+
+  test('user serialization never exposes passwordHash', async () => {
+    const user = new User({
+      name: 'Test User',
+      email: 'test@example.com',
+      passwordHash: 'hashed-value'
+    });
+    expect(user.toJSON().passwordHash).toBeUndefined();
   });
 });
