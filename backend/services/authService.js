@@ -9,12 +9,25 @@ function fail(message, statusCode) {
 
 function getJwtSecret() {
   const secret = String(process.env.JWT_SECRET || '').trim();
-  if (!secret || secret === 'change-this-secret') fail('JWT_SECRET must be configured', 500);
+  if (!secret || secret.length < 32) fail('JWT_SECRET must be configured with at least 32 characters', 500);
   return secret;
 }
 
 function normalizeEmail(email) {
   return String(email || '').trim().toLowerCase();
+}
+
+async function verifyStoredPassword(account, password) {
+  const hash = String(account?.passwordHash || account?.password || '');
+  if (!hash) return false;
+  return bcrypt.compare(String(password || ''), hash).catch(() => false);
+}
+
+async function migrateLegacyPassword(model, account, password) {
+  if (!account?.passwordHash && account?.password && bcrypt.getRounds(account.password)) {
+    const passwordHash = await bcrypt.hash(String(password), 12);
+    await model.updateOne({ _id: account._id }, { $set: { passwordHash }, $unset: { password: 1 } });
+  }
 }
 
 async function signup({ name, email, password }) {
@@ -46,11 +59,12 @@ async function login({ email, password }) {
   if (cleanPassword.length < 6 || cleanPassword.length > 128) fail('Password must be 6–128 characters long', 400);
 
   const secret = getJwtSecret();
-  const admin = await Admin.findOne({ email: normalized }).select('+passwordHash');
+  const admin = await Admin.findOne({ email: normalized }).lean();
 
   if (admin) {
-    const isValid = await admin.comparePassword(cleanPassword);
+    const isValid = await verifyStoredPassword(admin, cleanPassword);
     if (!isValid) fail('Invalid credentials', 401);
+    await migrateLegacyPassword(Admin, admin, cleanPassword);
     return {
       token: jwt.sign(
         { id: String(admin._id), role: 'admin', email: normalized },
@@ -61,8 +75,9 @@ async function login({ email, password }) {
     };
   }
 
-  const user = await User.findOne({ email: normalized }).select('+passwordHash');
-  if (!user || !(await user.comparePassword(cleanPassword))) fail('Invalid credentials', 401);
+  const user = await User.findOne({ email: normalized }).lean();
+  if (!user || !(await verifyStoredPassword(user, cleanPassword))) fail('Invalid credentials', 401);
+  await migrateLegacyPassword(User, user, cleanPassword);
 
   return {
     token: jwt.sign(
