@@ -7,7 +7,7 @@ const stationService = require('../services/stationService');
 
 describe('MetroSync rubric integration tests', () => {
   beforeAll(() => {
-    process.env.JWT_SECRET = 'test-secret-key';
+    process.env.JWT_SECRET = 'test-secret-key-with-at-least-32-chars';
   });
 
   afterEach(() => {
