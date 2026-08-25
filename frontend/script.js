@@ -1,4 +1,3 @@
-// Local frontend configuration keeps the Zeyad backend on port 5001.
 window.BACKEND_URL = window.BACKEND_URL || (
   window.location.protocol === 'http:' &&
   (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
@@ -9,6 +8,6 @@ window.BACKEND_URL = window.BACKEND_URL || (
 );
 
 const loader = document.createElement('script');
-loader.src = 'app.js';
+loader.src = 'app.js?v=20260826-2';
 loader.async = false;
 document.currentScript?.after(loader);
