@@ -1,174 +1,193 @@
 (() => {
-  let roomSocket = null;
-  let currentRoom = null;
-  let timer = null;
+  let socket = null;
+  let activeRoom = null;
+  let refreshTimer = null;
 
   const API = String(window.BACKEND_URL || location.origin).replace(/\/+$/, '');
+  const token = () => localStorage.getItem('metro_token') || '';
   const esc = value => String(value ?? '').replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll("'", '&#039;');
 
   function addStyles() {
-    if (document.getElementById('activeRoomEntryStyles')) return;
+    if (document.getElementById('adminActiveRoomStyles')) return;
     const style = document.createElement('style');
-    style.id = 'activeRoomEntryStyles';
+    style.id = 'adminActiveRoomStyles';
     style.textContent = `
-      #adminRooms .row-actions { display:flex; justify-content:flex-end; align-items:center; gap:8px; }
-      #adminRooms .row-actions button { white-space:nowrap; }
-      #adminActiveRoomPanel { margin-bottom:18px; }
-      #adminActiveRoomPanel .room-info-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; margin-top:14px; }
-      #adminActiveRoomPanel .room-info-card { padding:12px 14px; border:1px solid rgba(255,255,255,.08); border-radius:12px; background:rgba(255,255,255,.02); }
-      #adminActiveRoomPanel .room-info-card small { display:block; opacity:.7; margin-bottom:5px; }
-      #adminActiveRoomPanel .room-info-card strong { display:block; font-size:18px; }
-      #adminActiveRoomPanel .room-live-note { margin-top:14px; }
-      @media(max-width:800px){ #adminActiveRoomPanel .room-info-grid { grid-template-columns:repeat(2,minmax(0,1fr)); } }
-      @media(max-width:520px){ #adminActiveRoomPanel .room-info-grid { grid-template-columns:1fr; } #adminRooms .row-actions { justify-content:flex-start; } }
+      #adminRooms .admin-room-entry { display:flex; justify-content:flex-end; margin-top:10px; }
+      #adminRooms .admin-room-entry .btn { min-width:170px; }
+      #adminRoomDetail { margin-top:18px; }
+      #adminRoomDetail .live-room-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; margin-top:16px; }
+      #adminRoomDetail .live-room-card { padding:14px; border:1px solid rgba(255,255,255,.08); border-radius:12px; background:rgba(255,255,255,.025); }
+      #adminRoomDetail .live-room-card small { display:block; opacity:.7; margin-bottom:6px; }
+      #adminRoomDetail .live-room-card strong { display:block; font-size:18px; }
+      #adminRoomDetail .live-room-meta { margin-top:14px; display:flex; flex-wrap:wrap; gap:8px; }
+      #adminRoomDetail .live-room-meta span { padding:7px 10px; border-radius:999px; background:rgba(255,255,255,.05); font-size:12px; }
+      @media(max-width:800px){ #adminRoomDetail .live-room-grid { grid-template-columns:repeat(2,minmax(0,1fr)); } }
+      @media(max-width:520px){ #adminRoomDetail .live-room-grid { grid-template-columns:1fr; } }
     `;
     document.head.appendChild(style);
   }
 
-  function token() {
-    return localStorage.getItem('metro_token') || '';
+  async function getStations() {
+    const response = await fetch(`${API}/api/v1/stations`, { cache: 'no-store' });
+    const data = await response.json().catch(() => []);
+    if (!response.ok) throw new Error(data?.error || 'Unable to load stations');
+    return Array.isArray(data) ? data : [];
   }
 
-  async function loadRooms() {
+  async function getRooms() {
     const response = await fetch(`${API}/api/v1/users/waiting-rooms`, {
       headers: { Authorization: `Bearer ${token()}` },
       cache: 'no-store'
     });
     const data = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(data.error || 'Unable to load waiting rooms');
+    if (!response.ok) throw new Error(data?.error || 'Unable to load waiting rooms');
     return data.rooms || [];
   }
 
-  function panel() {
-    const list = document.getElementById('adminRooms');
-    if (!list) return null;
-    let host = document.getElementById('adminActiveRoomPanel');
-    if (!host) {
-      host = document.createElement('div');
-      host.id = 'adminActiveRoomPanel';
-      host.className = 'panel';
-      host.hidden = true;
-      list.parentElement?.insertBefore(host, list);
-    }
+  function ensureDetailHost() {
+    const host = document.getElementById('adminRoomDetail');
+    if (!host) return null;
+    host.hidden = false;
     return host;
   }
 
   function closeRoom() {
-    if (roomSocket) {
-      try { roomSocket.emit('leaveStation'); } catch (_) {}
-      roomSocket.disconnect();
-      roomSocket = null;
+    if (socket) {
+      try { socket.emit('leaveStation'); } catch (_) {}
+      socket.disconnect();
+      socket = null;
     }
-    currentRoom = null;
-    const host = panel();
-    if (host) { host.hidden = true; host.innerHTML = ''; }
+    activeRoom = null;
+    const host = document.getElementById('adminRoomDetail');
+    if (host) {
+      host.hidden = true;
+      host.innerHTML = '';
+    }
   }
 
-  function renderRoom(room) {
-    const host = panel();
+  function renderRoom(room, station) {
+    const host = ensureDetailHost();
     if (!host) return;
-    host.hidden = false;
     const count = Math.max(0, Number(room.onlinePassengers) || 0);
     host.innerHTML = `
-      <div class="panel-head">
-        <div>
-          <p class="mini">LIVE WAITING ROOM</p>
-          <h4>${esc(room.name)} <span style="display:inline-block;margin-left:8px;padding:4px 8px;border-radius:999px;background:#10362a;color:#8fe6bd;font-size:10px">ACTIVE</span></h4>
-          <span>${esc(room.line)} · ${esc(room.city || '')}</span>
+      <div class="panel">
+        <div class="panel-head">
+          <div>
+            <p class="mini">LIVE WAITING ROOM</p>
+            <h4>${esc(station.name)}</h4>
+            <span>${esc(station.line || room.line || '—')} · ${esc(station.city || room.city || '—')}</span>
+          </div>
+          <button id="adminCloseActiveRoom" class="btn quiet" type="button">Leave room</button>
         </div>
-        <button id="activeRoomClose" class="btn quiet" type="button">Close room</button>
-      </div>
-      <div class="room-info-grid">
-        <div class="room-info-card"><small>Waiting passengers</small><strong id="activeRoomCount">${count}</strong></div>
-        <div class="room-info-card"><small>Room status</small><strong id="activeRoomStatus">${count > 0 ? 'ACTIVE' : 'EMPTY'}</strong></div>
-        <div class="room-info-card"><small>Arrival</small><strong id="activeRoomArrival">${esc(room.arrivalTime || '—')}</strong></div>
-        <div class="room-info-card"><small>Departure</small><strong id="activeRoomDeparture">${esc(room.departureTime || '—')}</strong></div>
-      </div>
-      <div class="room-message room-live-note">
-        <strong>Live admin view</strong>
-        <span>Station: ${esc(room.name)} · ${esc(room.city || '—')} · ${esc(room.line || '—')}</span>
-        <span>Passenger count updates automatically when users enter or leave this room.</span>
-      </div>
-    `;
-    document.getElementById('activeRoomClose')?.addEventListener('click', closeRoom);
+        <div class="live-room-grid">
+          <div class="live-room-card"><small>Waiting passengers</small><strong id="adminLivePassengerCount">${count}</strong></div>
+          <div class="live-room-card"><small>Status</small><strong id="adminLiveRoomStatus">${count > 0 ? 'ACTIVE' : 'EMPTY'}</strong></div>
+          <div class="live-room-card"><small>Arrival</small><strong>${esc(station.arrivalTime || '—')}</strong></div>
+          <div class="live-room-card"><small>Departure</small><strong>${esc(station.departureTime || '—')}</strong></div>
+        </div>
+        <div class="live-room-meta">
+          <span>Station: ${esc(station.name)}</span>
+          <span>Line: ${esc(station.line || '—')}</span>
+          <span>City: ${esc(station.city || '—')}</span>
+          <span>Governorate: ${esc(station.governorate || '—')}</span>
+          <span>Order: ${esc(station.order ?? '—')}</span>
+        </div>
+        <div class="room-message" style="margin-top:14px">
+          <strong>Admin observer</strong>
+          <span>This room is live. Passenger count changes automatically when users join or leave. The admin is not included in the count.</span>
+        </div>
+      </div>`;
+    document.getElementById('adminCloseActiveRoom')?.addEventListener('click', closeRoom);
   }
 
-  function enter(room) {
-    if (!room || !room.active) return;
-    closeRoom();
-    currentRoom = { ...room };
-    renderRoom(currentRoom);
-    if (typeof window.io !== 'function') return;
+  function applyPresence(payload) {
+    if (!activeRoom || String(payload?.stationId) !== String(activeRoom.stationId)) return;
+    const count = Math.max(0, Number(payload?.count) || 0);
+    activeRoom.onlinePassengers = count;
+    const countEl = document.getElementById('adminLivePassengerCount');
+    const statusEl = document.getElementById('adminLiveRoomStatus');
+    if (countEl) countEl.textContent = String(count);
+    if (statusEl) statusEl.textContent = count > 0 ? 'ACTIVE' : 'EMPTY';
+  }
 
-    roomSocket = window.io(API, {
-      auth: { token: token() },
-      transports: ['websocket', 'polling']
-    });
+  async function enterRoom(room) {
+    if (!room?.active) return;
+    try {
+      closeRoom();
+      const stations = await getStations();
+      const station = stations.find(item => String(item._id) === String(room.stationId));
+      if (!station) throw new Error('Station details could not be loaded.');
+      activeRoom = { ...room, stationId: String(room.stationId) };
+      renderRoom(activeRoom, station);
 
-    roomSocket.on('connect', () => {
-      roomSocket.emit('joinStation', String(currentRoom.stationId));
-    });
-
-    const updateCount = payload => {
-      if (!currentRoom || String(payload?.stationId) !== String(currentRoom.stationId)) return;
-      const count = Math.max(0, Number(payload?.count) || 0);
-      currentRoom.onlinePassengers = count;
-      const countEl = document.getElementById('activeRoomCount');
-      const statusEl = document.getElementById('activeRoomStatus');
-      if (countEl) countEl.textContent = String(count);
-      if (statusEl) statusEl.textContent = count > 0 ? 'ACTIVE' : 'EMPTY';
-    };
-
-    roomSocket.on('presenceUpdate', updateCount);
-    roomSocket.on('roomCount', updateCount);
+      if (typeof window.io !== 'function') throw new Error('Socket.IO is not available on this page.');
+      socket = window.io(API, {
+        auth: { token: token() },
+        transports: ['websocket', 'polling']
+      });
+      socket.on('connect', () => socket.emit('joinStation', activeRoom.stationId));
+      socket.on('presenceUpdate', applyPresence);
+      socket.on('roomCount', applyPresence);
+      socket.on('stationsUpdated', async () => {
+        try {
+          const latest = await getStations();
+          const current = latest.find(item => String(item._id) === String(activeRoom.stationId));
+          if (current) renderRoom(activeRoom, current);
+        } catch (_) {}
+      });
+      socket.on('disconnect', () => {
+        const status = document.getElementById('adminLiveRoomStatus');
+        if (status) status.textContent = 'RECONNECTING';
+      });
+    } catch (error) {
+      const host = ensureDetailHost();
+      if (host) host.innerHTML = `<div class="panel"><p class="message">${esc(error.message)}</p></div>`;
+    }
   }
 
   function patchRows(rooms) {
     const list = document.getElementById('adminRooms');
     if (!list) return;
-
-    const roomById = new Map(rooms.map(room => [String(room.stationId), room]));
-
     list.querySelectorAll('.admin-row').forEach(row => {
-      const button = row.querySelector('.row-actions button[data-open-room], .row-actions button[data-open-room]');
-      const name = row.querySelector('strong')?.textContent?.trim();
-      const room = rooms.find(item => String(item.name).trim() === String(name).trim());
-      const target = button || row.querySelector('.row-actions button');
-      if (!target || !room) return;
+      const stationName = row.querySelector('strong')?.textContent?.trim();
+      const room = rooms.find(item => String(item.name).trim() === stationName);
+      if (!room) return;
 
-      target.onclick = null;
-      target.replaceWith(target.cloneNode(true));
-      const action = row.querySelector('.row-actions button');
-      action.type = 'button';
+      let actions = row.querySelector('.admin-room-entry');
+      if (!actions) {
+        actions = document.createElement('div');
+        actions.className = 'admin-room-entry';
+        row.appendChild(actions);
+      }
+      actions.innerHTML = '';
 
       if (room.active) {
-        action.disabled = false;
-        action.className = 'btn primary';
-        action.textContent = 'Enter active room';
-        action.title = 'Open the live waiting room as an admin observer';
-        action.onclick = () => enter(room);
+        const button = document.createElement('button');
+        button.className = 'btn primary';
+        button.type = 'button';
+        button.textContent = 'Enter active room';
+        button.addEventListener('click', () => enterRoom(room));
+        actions.appendChild(button);
       } else {
-        action.disabled = true;
-        action.className = 'btn quiet';
-        action.textContent = 'No active users';
-        action.title = 'This waiting room has no passengers';
+        const label = document.createElement('span');
+        label.className = 'muted';
+        label.textContent = 'No active passengers';
+        actions.appendChild(label);
       }
     });
   }
 
-  async function refresh() {
+  async function refreshButtons() {
     if (localStorage.getItem('metro_role') !== 'admin') return;
     const list = document.getElementById('adminRooms');
     if (!list) return;
-    try {
-      patchRows(await loadRooms());
-    } catch (_) {}
+    try { patchRows(await getRooms()); } catch (_) {}
   }
 
   function start() {
     addStyles();
-    refresh();
-    if (!timer) timer = setInterval(refresh, 1000);
+    refreshButtons();
+    if (!refreshTimer) refreshTimer = setInterval(refreshButtons, 1500);
   }
 
   window.addEventListener('load', start);
