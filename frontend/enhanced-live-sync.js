@@ -3,6 +3,10 @@
   let refreshTimer = null;
   let onlineChip = null;
 
+  function hasState() {
+    return typeof state !== 'undefined' && state && state.token;
+  }
+
   function ensureOnlineChip() {
     if (onlineChip || !document.querySelector('.top-actions')) return;
     onlineChip = document.createElement('span');
@@ -18,7 +22,7 @@
   }
 
   function updateRoomFromState() {
-    if (!window.state || !state.roomId) return;
+    if (!hasState() || !state.roomId) return;
     const station = state.stations?.find(item => String(item._id) === String(state.roomId));
     if (!station) return;
 
@@ -34,15 +38,11 @@
     if (roomArrival) roomArrival.textContent = station.arrivalTime || '—';
     if (roomDestination) roomDestination.textContent = state.destination?.name || '—';
     if (roomStatus) roomStatus.textContent = 'Live room synchronized';
-    if (roomStatusDetail) {
-      const arrival = station.arrivalTime || '—';
-      const departure = station.departureTime || '—';
-      roomStatusDetail.textContent = `Arrival ${arrival} · Departure ${departure}`;
-    }
+    if (roomStatusDetail) roomStatusDetail.textContent = `Arrival ${station.arrivalTime || '—'} · Departure ${station.departureTime || '—'}`;
   }
 
   async function refreshRoomState() {
-    if (!window.state || !state.token) return;
+    if (!hasState()) return;
     try {
       if (typeof syncStations === 'function') await syncStations();
       updateRoomFromState();
@@ -57,22 +57,15 @@
   }
 
   function attachSocket() {
-    if (!window.state?.socket || attachedSocket === state.socket) return;
+    if (!hasState() || !state.socket || attachedSocket === state.socket) return;
     attachedSocket = state.socket;
 
     state.socket.on('onlineCount', updateOnlineCount);
-
     state.socket.on('connect', async () => {
-      if (state.roomId) {
-        state.socket.emit('joinStation', String(state.roomId));
-      }
+      if (state.roomId) state.socket.emit('joinStation', String(state.roomId));
       await refreshRoomState();
     });
-
-    state.socket.on('stationsUpdated', async () => {
-      await refreshRoomState();
-    });
-
+    state.socket.on('stationsUpdated', refreshRoomState);
     state.socket.on('presenceUpdate', ({ stationId, count }) => {
       if (state.roomId && String(stationId) === String(state.roomId)) {
         const roomCount = document.getElementById('roomCount');
