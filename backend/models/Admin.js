@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const bcrypt = require('bcrypt');
 
 const adminSchema = new mongoose.Schema(
   {
@@ -20,6 +21,10 @@ const adminSchema = new mongoose.Schema(
   },
   { timestamps: true }
 );
+
+adminSchema.methods.comparePassword = function comparePassword(password) {
+  return bcrypt.compare(String(password || ''), this.passwordHash || '').catch(() => false);
+};
 
 adminSchema.set('toJSON', {
   transform: (_doc, ret) => {
