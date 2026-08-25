@@ -14,6 +14,20 @@ The backend provides:
 - `POST /api/v1/stations/:stationId/announcements` admin-only announcement creation
 - Socket.io station rooms, presence counts, and live announcement broadcasts
 
+## Login flow
+
+The login flow follows the strong parts of the companion Mohamed project while keeping Zeyad's own architecture:
+
+1. Passenger or admin submits email and password.
+2. The backend normalizes the email and validates the password length.
+3. Admin is looked up first in MongoDB; passenger users are checked second.
+4. The stored bcrypt hash is compared through the model's `comparePassword()` method.
+5. A JWT containing the user id, role, issuer, and audience is returned.
+6. The frontend saves the token and role, connects Socket.IO with the authenticated token, and opens the correct passenger/admin dashboard.
+7. Refreshing the page restores the session; logout clears the token and returns to login.
+
+For admin credentials, the account must exist in MongoDB. After changing `ADMIN_EMAIL` or `ADMIN_PASSWORD`, run `npm run seed:admin` again.
+
 ## Local setup
 
 1. Copy `backend/.env.example` to `backend/.env`.
@@ -59,6 +73,8 @@ npm run dev
 ```
 
 The root launcher keeps the frontend on port `8000` and the API on port `5001` so the two local services do not conflict.
+
+The frontend now includes a guided authentication experience, password visibility controls, saved login email, session restoration, and visual MetroFlow network/station illustrations under `frontend/assets/`.
 
 The frontend can also be served by any static host. Set `window.BACKEND_URL` to the deployed API URL when the frontend and API are hosted separately.
 
