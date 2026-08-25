@@ -11,11 +11,16 @@
     const style = document.createElement('style');
     style.id = 'activeRoomEntryStyles';
     style.textContent = `
-      #adminRooms .admin-row { grid-template-columns: minmax(0,1fr) auto auto auto; }
-      #adminRooms .active-room-actions { display:flex; justify-content:flex-end; gap:8px; }
-      #adminRooms .active-room-actions button { white-space:nowrap; }
+      #adminRooms .row-actions { display:flex; justify-content:flex-end; align-items:center; gap:8px; }
+      #adminRooms .row-actions button { white-space:nowrap; }
       #adminActiveRoomPanel { margin-bottom:18px; }
-      @media(max-width:650px){ #adminRooms .admin-row { grid-template-columns:1fr; } #adminRooms .active-room-actions { justify-content:flex-start; } }
+      #adminActiveRoomPanel .room-info-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; margin-top:14px; }
+      #adminActiveRoomPanel .room-info-card { padding:12px 14px; border:1px solid rgba(255,255,255,.08); border-radius:12px; background:rgba(255,255,255,.02); }
+      #adminActiveRoomPanel .room-info-card small { display:block; opacity:.7; margin-bottom:5px; }
+      #adminActiveRoomPanel .room-info-card strong { display:block; font-size:18px; }
+      #adminActiveRoomPanel .room-live-note { margin-top:14px; }
+      @media(max-width:800px){ #adminActiveRoomPanel .room-info-grid { grid-template-columns:repeat(2,minmax(0,1fr)); } }
+      @media(max-width:520px){ #adminActiveRoomPanel .room-info-grid { grid-template-columns:1fr; } #adminRooms .row-actions { justify-content:flex-start; } }
     `;
     document.head.appendChild(style);
   }
@@ -63,6 +68,7 @@
     const host = panel();
     if (!host) return;
     host.hidden = false;
+    const count = Math.max(0, Number(room.onlinePassengers) || 0);
     host.innerHTML = `
       <div class="panel-head">
         <div>
@@ -72,14 +78,16 @@
         </div>
         <button id="activeRoomClose" class="btn quiet" type="button">Close room</button>
       </div>
-      <div class="room-stats">
-        <article><small>Waiting passengers</small><strong id="activeRoomCount">${Number(room.onlinePassengers || 0)}</strong></article>
-        <article><small>Room status</small><strong id="activeRoomStatus">${Number(room.onlinePassengers || 0) > 0 ? 'ACTIVE' : 'EMPTY'}</strong></article>
-        <article><small>Arrival</small><strong>${esc(room.arrivalTime || '—')}</strong></article>
+      <div class="room-info-grid">
+        <div class="room-info-card"><small>Waiting passengers</small><strong id="activeRoomCount">${count}</strong></div>
+        <div class="room-info-card"><small>Room status</small><strong id="activeRoomStatus">${count > 0 ? 'ACTIVE' : 'EMPTY'}</strong></div>
+        <div class="room-info-card"><small>Arrival</small><strong id="activeRoomArrival">${esc(room.arrivalTime || '—')}</strong></div>
+        <div class="room-info-card"><small>Departure</small><strong id="activeRoomDeparture">${esc(room.departureTime || '—')}</strong></div>
       </div>
-      <div class="room-message">
-        <strong>Admin is inside the room</strong>
-        <span>Read-only observer mode. The admin does not increase the passenger count.</span>
+      <div class="room-message room-live-note">
+        <strong>Live admin view</strong>
+        <span>Station: ${esc(room.name)} · ${esc(room.city || '—')} · ${esc(room.line || '—')}</span>
+        <span>Passenger count updates automatically when users enter or leave this room.</span>
       </div>
     `;
     document.getElementById('activeRoomClose')?.addEventListener('click', closeRoom);
@@ -88,8 +96,8 @@
   function enter(room) {
     if (!room || !room.active) return;
     closeRoom();
-    currentRoom = room;
-    renderRoom(room);
+    currentRoom = { ...room };
+    renderRoom(currentRoom);
     if (typeof window.io !== 'function') return;
 
     roomSocket = window.io(API, {
@@ -98,7 +106,7 @@
     });
 
     roomSocket.on('connect', () => {
-      roomSocket.emit('joinStation', String(room.stationId));
+      roomSocket.emit('joinStation', String(currentRoom.stationId));
     });
 
     const updateCount = payload => {
@@ -118,28 +126,32 @@
   function patchRows(rooms) {
     const list = document.getElementById('adminRooms');
     if (!list) return;
-    const byName = new Map(rooms.map(room => [String(room.name), room]));
+
+    const roomById = new Map(rooms.map(room => [String(room.stationId), room]));
 
     list.querySelectorAll('.admin-row').forEach(row => {
+      const button = row.querySelector('.row-actions button[data-open-room], .row-actions button[data-open-room]');
       const name = row.querySelector('strong')?.textContent?.trim();
-      const room = byName.get(name);
-      if (!room) return;
+      const room = rooms.find(item => String(item.name).trim() === String(name).trim());
+      const target = button || row.querySelector('.row-actions button');
+      if (!target || !room) return;
 
-      let actions = row.querySelector('.active-room-actions');
-      if (!actions) {
-        actions = document.createElement('div');
-        actions.className = 'active-room-actions';
-        row.appendChild(actions);
-      }
-      actions.innerHTML = '';
+      target.onclick = null;
+      target.replaceWith(target.cloneNode(true));
+      const action = row.querySelector('.row-actions button');
+      action.type = 'button';
 
       if (room.active) {
-        const button = document.createElement('button');
-        button.type = 'button';
-        button.className = 'btn primary';
-        button.textContent = 'Enter active room';
-        button.addEventListener('click', () => enter(room));
-        actions.appendChild(button);
+        action.disabled = false;
+        action.className = 'btn primary';
+        action.textContent = 'Enter active room';
+        action.title = 'Open the live waiting room as an admin observer';
+        action.onclick = () => enter(room);
+      } else {
+        action.disabled = true;
+        action.className = 'btn quiet';
+        action.textContent = 'No active users';
+        action.title = 'This waiting room has no passengers';
       }
     });
   }
