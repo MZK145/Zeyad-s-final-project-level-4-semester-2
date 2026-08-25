@@ -16,17 +16,28 @@ function count(io, stationId) {
   return total;
 }
 
+// Global online passenger count: authenticated users count immediately after
+// Socket.IO connects, even before they join a station waiting room.
 function getOnlineCount(io) {
   if (!io) return 0;
   const users = new Set();
   for (const socket of io.sockets.sockets.values()) {
-    if (socket.data.role === 'user' && socket.data.userId) users.add(String(socket.data.userId));
+    if (socket.data.role === 'user' && socket.data.userId) {
+      users.add(String(socket.data.userId));
+    }
   }
   return users.size;
 }
 
 function announcePresence(io, stationId) {
-  io.to(room(stationId)).emit('presenceUpdate', { stationId, count: count(io, stationId) });
+  io.to(room(stationId)).emit('presenceUpdate', {
+    stationId,
+    count: count(io, stationId)
+  });
+}
+
+function broadcastOnlineCount(io) {
+  io.emit('onlineCount', getOnlineCount(io));
 }
 
 function leave(io, socket) {
@@ -62,13 +73,18 @@ function socketHandler(io) {
   });
 
   io.on('connection', (socket) => {
-    socket.emit('onlineCount', getOnlineCount(io));
+    // Authenticated users are online as soon as the socket connects.
+    broadcastOnlineCount(io);
 
     socket.on('register', (requested) => {
       if (requested && String(requested) !== String(socket.data.userId)) {
         return socket.emit('registerError', { message: 'Socket identity mismatch' });
       }
-      socket.emit('registered', { userId: socket.data.userId, role: socket.data.role });
+      socket.emit('registered', {
+        userId: socket.data.userId,
+        role: socket.data.role
+      });
+      broadcastOnlineCount(io);
     });
 
     socket.on('joinStation', (stationId) => {
@@ -76,23 +92,27 @@ function socketHandler(io) {
       if (!id) return socket.emit('stationError', { message: 'Station id required' });
 
       const previous = stationBySocket.get(socket.id);
-      if (previous === id) return announcePresence(io, id);
+      if (previous === id) {
+        announcePresence(io, id);
+        broadcastOnlineCount(io);
+        return;
+      }
       if (previous) leave(io, socket);
 
       socket.join(room(id));
       stationBySocket.set(socket.id, id);
       announcePresence(io, id);
-      io.emit('onlineCount', getOnlineCount(io));
+      broadcastOnlineCount(io);
     });
 
     socket.on('leaveStation', () => {
       leave(io, socket);
-      io.emit('onlineCount', getOnlineCount(io));
+      broadcastOnlineCount(io);
     });
 
     socket.on('disconnect', () => {
       leave(io, socket);
-      io.emit('onlineCount', getOnlineCount(io));
+      broadcastOnlineCount(io);
     });
   });
 }
