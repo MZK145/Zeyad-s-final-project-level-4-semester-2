@@ -43,14 +43,14 @@ async function login({ email, password }) {
   const cleanPassword = String(password || '');
 
   if (!normalized || !cleanPassword) fail('Email and password are required', 400);
+  if (cleanPassword.length < 6 || cleanPassword.length > 128) fail('Password must be 6–128 characters long', 400);
 
   const secret = getJwtSecret();
-  const admin = await Admin.findOne({ email: normalized }).select('+passwordHash').lean();
+  const admin = await Admin.findOne({ email: normalized }).select('+passwordHash');
 
   if (admin) {
-    const isValid = await bcrypt.compare(cleanPassword, admin.passwordHash || '').catch(() => false);
+    const isValid = await admin.comparePassword(cleanPassword);
     if (!isValid) fail('Invalid credentials', 401);
-
     return {
       token: jwt.sign(
         { id: String(admin._id), role: 'admin', email: normalized },
@@ -61,9 +61,8 @@ async function login({ email, password }) {
     };
   }
 
-  const user = await User.findOne({ email: normalized }).select('+passwordHash').lean();
-  const isValid = await bcrypt.compare(cleanPassword, user?.passwordHash || '').catch(() => false);
-  if (!user || !isValid) fail('Invalid credentials', 401);
+  const user = await User.findOne({ email: normalized }).select('+passwordHash');
+  if (!user || !(await user.comparePassword(cleanPassword))) fail('Invalid credentials', 401);
 
   return {
     token: jwt.sign(
