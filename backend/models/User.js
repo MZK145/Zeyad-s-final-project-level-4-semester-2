@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const bcrypt = require('bcrypt');
 
 const userSchema = new mongoose.Schema(
   {
@@ -27,6 +28,10 @@ const userSchema = new mongoose.Schema(
   },
   { timestamps: true }
 );
+
+userSchema.methods.comparePassword = function comparePassword(password) {
+  return bcrypt.compare(String(password || ''), this.passwordHash || '').catch(() => false);
+};
 
 userSchema.set('toJSON', {
   transform: (_doc, ret) => {
