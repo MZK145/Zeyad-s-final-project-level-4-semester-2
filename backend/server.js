@@ -7,16 +7,33 @@ const { socketHandler } = require('./sockets/socketHandler');
 // Local development defaults to 5001. Render supplies its own PORT at runtime.
 const port = Number(process.env.PORT) || 5001;
 const mongoUrl = process.env.MONGO_URI || process.env.MONGODB_URI;
-const socketOrigins = String(process.env.FRONTEND_ORIGINS || '')
+
+// Keep Socket.IO origins aligned with the Express CORS configuration.
+// This is important during local development because the frontend normally
+// runs on localhost:3000 while the API/socket server runs on localhost:5001.
+const localOrigins = [
+  'http://localhost:3000',
+  'http://127.0.0.1:3000',
+  'http://localhost:8000',
+  'http://127.0.0.1:8000',
+  'null'
+];
+const configuredOrigins = String(process.env.FRONTEND_ORIGINS || '')
   .split(',')
   .map((origin) => origin.trim())
   .filter(Boolean);
+const socketOrigins = [...new Set([...localOrigins, ...configuredOrigins])];
 const socketCorsOrigin = socketOrigins.length ? socketOrigins : '*';
 
 function startServer(portToUse) {
   return new Promise((resolve, reject) => {
     const server = http.createServer(app);
-    const io = require('socket.io')(server, { cors: { origin: socketCorsOrigin } });
+    const io = require('socket.io')(server, {
+      cors: {
+        origin: socketCorsOrigin,
+        credentials: true
+      }
+    });
     app.locals.io = io;
     socketHandler(io);
 
