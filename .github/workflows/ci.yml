@@ -24,7 +24,7 @@ jobs:
         run: npm ci
       - name: Run tests
         run: npm test
-      - name: Syntax check source files
+      - name: Syntax check backend source files
         run: |
           find . -path './node_modules' -prune -o -name '*.js' -type f -print0 | xargs -0 -n1 node --check
 
@@ -37,7 +37,15 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
-      - name: Syntax check frontend JavaScript
-        run: node --check frontend/script.js
+      - name: Syntax check all frontend JavaScript
+        run: |
+          find frontend -name '*.js' -type f -print0 | xargs -0 -n1 node --check
       - name: Validate required frontend files
-        run: test -f frontend/index.html && test -f frontend/style.css
+        run: |
+          test -f frontend/index.html
+          test -f frontend/style.css
+          test -f frontend/script.js
+          test -f frontend/login-enhancements.js
+          test -f frontend/enhanced-live-sync.js
+          test -f frontend/active-room-button.js
+          test -f frontend/admin-room-controls.js
