@@ -6,38 +6,32 @@ MetroSync is a Node.js/Express + Socket.io real-time metro dashboard backed by M
 
 The backend provides:
 
-- `GET /api/v1/health` health check
+- `GET /health` and `GET /api/v1/health` health checks
 - `GET /api/v1/stations` station list sorted by line and order
-- `POST /api/v1/auth/login` admin/user authentication with JWT
+- `POST /api/v1/auth/login` admin/passenger authentication with bcrypt + JWT
 - `POST /api/v1/auth/signup` passenger registration
 - `GET /api/v1/stations/:stationId/announcements` public paginated/filterable announcements
 - `POST /api/v1/stations/:stationId/announcements` admin-only announcement creation
-- Socket.io station rooms, presence counts, and live announcement broadcasts
+- Admin-protected station create/edit/delete operations
+- Admin waiting-room monitoring with live passenger counts
+- Socket.io station rooms, presence counts, live room updates, and announcement broadcasts
 
-## Login flow
+## Authentication and waiting rooms
 
-The login flow follows the strong parts of the companion Mohamed project while keeping Zeyad's own architecture:
-
-1. Passenger or admin submits email and password.
-2. The backend normalizes the email and validates the password length.
-3. Admin is looked up first in MongoDB; passenger users are checked second.
-4. The stored bcrypt hash is compared through the model's `comparePassword()` method.
-5. A JWT containing the user id, role, issuer, and audience is returned.
-6. The frontend saves the token and role, connects Socket.IO with the authenticated token, and opens the correct passenger/admin dashboard.
-7. Refreshing the page restores the session; logout clears the token and returns to login.
-
-For admin credentials, the account must exist in MongoDB. After changing `ADMIN_EMAIL` or `ADMIN_PASSWORD`, run `npm run seed:admin` again.
+1. Passenger or admin signs in with email and password.
+2. The backend validates credentials and issues a JWT containing the user id and role.
+3. The frontend connects Socket.io using the authenticated token.
+4. Passengers can enter a station waiting room and are counted only in that room.
+5. Admins can open a waiting room as observers without increasing the passenger count.
+6. Admins can edit the station from inside the opened room.
+7. Station edits emit `stationsUpdated`, and open passenger/admin views refresh the station data while preserving the live room count.
+8. Refreshing the page restores the authenticated session; logout clears it.
 
 ## Local setup
 
 1. Copy `backend/.env.example` to `backend/.env`.
-2. Set `MONGO_URI`, `JWT_SECRET`, `ADMIN_EMAIL`, and `ADMIN_PASSWORD`.
-3. Make sure the local backend port is `5001` in `backend/.env`:
-
-```env
-PORT=5001
-```
-
+2. Set `MONGO_URI`, a random `JWT_SECRET` of at least 32 characters, `ADMIN_EMAIL`, and `ADMIN_PASSWORD`.
+3. Keep `backend/.env` out of Git; the repository `.gitignore` already excludes it.
 4. From `backend/`, install dependencies:
 
 ```bash
@@ -56,42 +50,32 @@ npm run seed:stations
 npm run seed:admin
 ```
 
-7. Start the API:
+7. Start the backend:
 
 ```bash
 npm start
 ```
 
-The local API listens on `http://localhost:5001` by default and the health endpoint is `/api/v1/health`.
-
-## Frontend
-
-Serve `frontend/` with the root launcher:
+The local API listens on `http://localhost:5001` by default. The root launcher starts the frontend on port `8000` and the backend on port `5001`:
 
 ```bash
 npm run dev
 ```
 
-The root launcher keeps the frontend on port `8000` and the API on port `5001` so the two local services do not conflict.
-
-The frontend now includes a guided authentication experience, password visibility controls, saved login email, session restoration, and visual MetroFlow network/station illustrations under `frontend/assets/`.
-
-The frontend can also be served by any static host. Set `window.BACKEND_URL` to the deployed API URL when the frontend and API are hosted separately.
-
 ## Tests
 
-Run the backend tests with:
+Run the backend test suite with:
 
 ```bash
 cd backend
 npm test
 ```
 
-The test suite covers the rubric-required station 200 response, valid admin login token, protected announcement POST returning 401, and authentication validation.
+The repository also has GitHub Actions CI that installs dependencies, runs the backend tests, syntax-checks backend source files, syntax-checks every frontend JavaScript file, and verifies the required frontend files exist.
 
 ## Postman
 
-The rubric-aligned collection is stored at `postman/MetroSync.postman_collection.json`. Its local `baseUrl` is `http://localhost:5001`.
+The rubric-aligned collection is stored at `postman/MetroSync.postman_collection.json`. It includes health, admin login, stations, announcements, and waiting-room requests with saved example responses.
 
 ## Render deployment
 
@@ -103,4 +87,4 @@ The rubric-aligned collection is stored at `postman/MetroSync.postman_collection
 - `ADMIN_PASSWORD`
 - `FRONTEND_ORIGINS`
 
-Render supplies the production `PORT` automatically, so the local `5001` setting is only a development default. Render uses `/api/v1/health` as the health check.
+Render supplies the production `PORT` automatically. The configured health check is `/api/v1/health`.
