@@ -14,6 +14,13 @@ describe('MetroSync rubric integration tests', () => {
     jest.restoreAllMocks();
   });
 
+  test('GET /health returns 200 and status ok', async () => {
+    const res = await request(app).get('/health');
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ status: 'ok' });
+  });
+
   test('GET /api/v1/stations returns 200 and a JSON array', async () => {
     jest.spyOn(stationService, 'listStations').mockResolvedValue([
       { _id: '1', name: 'Test Station', line: 'Line 1', order: 1 }
