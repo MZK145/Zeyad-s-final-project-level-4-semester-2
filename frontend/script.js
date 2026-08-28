@@ -8,6 +8,6 @@ window.BACKEND_URL = window.BACKEND_URL || (
 );
 
 const loader = document.createElement('script');
-loader.src = 'app.js?v=20260826-2';
+loader.src = 'app.js?v=20260828-1';
 loader.async = false;
 document.currentScript?.after(loader);
