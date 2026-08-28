@@ -2,10 +2,9 @@
   let attachedSocket = null;
   let refreshTimer = null;
   let onlineChip = null;
+  let lastRoomId = null;
 
-  function hasState() {
-    return typeof state !== 'undefined' && state && state.token;
-  }
+  function hasState() { return typeof state !== 'undefined' && state && state.token; }
 
   function ensureOnlineChip() {
     if (onlineChip || !document.querySelector('.top-actions')) return;
@@ -21,18 +20,46 @@
     if (onlineChip) onlineChip.textContent = `Online passengers: ${Math.max(0, Number(count) || 0)}`;
   }
 
+  async function syncWaitingRoomPresence() {
+    if (!hasState() || state.role !== 'user') return;
+    const current = state.roomId ? String(state.roomId) : null;
+    if (current === lastRoomId) return;
+    try {
+      if (lastRoomId && !current) {
+        await fetch(`${window.BACKEND_URL}/api/v1/users/waiting-rooms/leave`, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${state.token}` },
+          cache: 'no-store'
+        });
+      }
+      if (current) {
+        const response = await fetch(`${window.BACKEND_URL}/api/v1/users/waiting-rooms/join`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${state.token}`
+          },
+          body: JSON.stringify({ stationId: current }),
+          cache: 'no-store'
+        });
+        if (!response.ok) throw new Error(`Waiting-room registration failed (${response.status})`);
+      }
+      lastRoomId = current;
+    } catch (error) {
+      console.warn('MetroFlow waiting-room presence:', error.message);
+    }
+  }
+
   function updateRoomFromState() {
     if (!hasState() || !state.roomId) return;
     const station = state.stations?.find(item => String(item._id) === String(state.roomId));
     if (!station) return;
-
     const roomName = document.getElementById('roomName');
     const roomLine = document.getElementById('roomLine');
     const roomArrival = document.getElementById('roomArrival');
     const roomDestination = document.getElementById('roomDestination');
     const roomStatus = document.getElementById('roomStatus');
     const roomStatusDetail = document.getElementById('roomStatusDetail');
-
     if (roomName) roomName.textContent = station.name;
     if (roomLine) roomLine.textContent = `${station.line} · ${station.city}`;
     if (roomArrival) roomArrival.textContent = station.arrivalTime || '—';
@@ -44,6 +71,7 @@
   async function refreshRoomState() {
     if (!hasState()) return;
     try {
+      await syncWaitingRoomPresence();
       if (typeof syncStations === 'function') await syncStations();
       updateRoomFromState();
     } catch (error) {
@@ -59,7 +87,6 @@
   function attachSocket() {
     if (!hasState() || !state.socket || attachedSocket === state.socket) return;
     attachedSocket = state.socket;
-
     state.socket.on('onlineCount', updateOnlineCount);
     state.socket.on('connect', async () => {
       if (state.roomId) state.socket.emit('joinStation', String(state.roomId));
@@ -77,7 +104,11 @@
   function start() {
     ensureOnlineChip();
     attachSocket();
-    if (!refreshTimer) refreshTimer = window.setInterval(attachSocket, 500);
+    syncWaitingRoomPresence();
+    if (!refreshTimer) refreshTimer = window.setInterval(() => {
+      attachSocket();
+      syncWaitingRoomPresence();
+    }, 1000);
   }
 
   window.addEventListener('load', start);
