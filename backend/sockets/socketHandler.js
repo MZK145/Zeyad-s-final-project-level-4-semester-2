@@ -16,8 +16,9 @@ function count(io, stationId) {
   return total;
 }
 
-// Global online passenger count: authenticated users count immediately after
-// Socket.IO connects, even before they join a station waiting room.
+// Count unique authenticated passenger accounts currently connected to Socket.IO.
+// This is deliberately independent from station rooms so an authenticated
+// passenger is visible to the admin immediately after login.
 function getOnlineCount(io) {
   if (!io) return 0;
   const users = new Set();
@@ -31,7 +32,7 @@ function getOnlineCount(io) {
 
 function announcePresence(io, stationId) {
   io.to(room(stationId)).emit('presenceUpdate', {
-    stationId,
+    stationId: String(stationId),
     count: count(io, stationId)
   });
 }
@@ -73,7 +74,9 @@ function socketHandler(io) {
   });
 
   io.on('connection', (socket) => {
-    // Authenticated users are online as soon as the socket connects.
+    // Send the count directly to the new socket as well as broadcasting it.
+    // This prevents a newly connected admin from waiting for the next event.
+    socket.emit('onlineCount', getOnlineCount(io));
     broadcastOnlineCount(io);
 
     socket.on('register', (requested) => {
@@ -101,6 +104,8 @@ function socketHandler(io) {
 
       socket.join(room(id));
       stationBySocket.set(socket.id, id);
+
+      // The joining socket must receive the current room count immediately.
       announcePresence(io, id);
       broadcastOnlineCount(io);
     });
